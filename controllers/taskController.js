@@ -19,28 +19,36 @@ exports.createTask = async (req, res) => {
 };
 
 exports.getTasks = async (req, res) => {
-    const { status, priority, dueDate, search } = req.query;
-    const whereClause = { userId: req.user.id };
-  
+  try {
+    const { status, priority, search, page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
     if (status) whereClause.status = status;
     if (priority) whereClause.priority = priority;
-    if (dueDate) whereClause.dueDate = dueDate;
     if (search) {
       whereClause[Op.or] = [
         { title: { [Op.like]: `%${search}%` } },
         { description: { [Op.like]: `%${search}%` } },
       ];
     }
-  
-    try {
-      const tasks = await Task.findAll({ where: whereClause });
-      res.status(200).json(tasks);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  };
-  
 
+    const tasks = await Task.findAndCountAll({
+      where: { ...whereClause, userId: req.user.id },
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+
+    res.json({
+      tasks: tasks.rows,
+      totalPages: Math.ceil(tasks.count / limit),
+      currentPage: parseInt(page),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+  
 exports.updateTask = async (req, res) => {
   const { id } = req.params;
   const { title, description, status, priority, dueDate } = req.body;
@@ -70,4 +78,4 @@ exports.deleteTask = async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-};
+}
